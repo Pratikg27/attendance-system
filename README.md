@@ -12,7 +12,7 @@
 [![Express](https://img.shields.io/badge/Express-4.18+-000000?style=for-the-badge&logo=express&logoColor=white)](https://expressjs.com/)
 [![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
 
-[Features](#-features) • [Demo](#-screenshots) • [Installation](#-installation) • [Usage](#-usage) • [API Docs](#-api-documentation)
+[Features](#-features) • [Demo](#-demo-video) • [Screenshots](#-screenshots) • [Installation](#-installation) • [Usage](#-usage) • [API Docs](#-api-documentation)
 
 </div>
 
@@ -21,6 +21,7 @@
 ## 📖 Table of Contents
 
 - [Overview](#-overview)
+- [Demo Video](#-demo-video)
 - [Key Features](#-key-features)
 - [Screenshots](#-screenshots)
 - [Tech Stack](#-tech-stack)
@@ -49,6 +50,34 @@
 | 💼 **User-Friendly** | Intuitive interface designed for non-technical users |
 | 🔧 **Maintainable** | Clean code architecture with proper separation of concerns |
 | 📱 **Responsive** | Works seamlessly across desktop, tablet, and mobile devices |
+
+---
+
+## 🎥 DEMO VIDEO
+
+**📽️ Full System Demonstration:** [Watch Demo Video](./DEMO_VIDEO.mp4)
+
+**Duration:** ~5-10 minutes  
+**Size:** 25.2 MB
+
+### What's Included in the Demo:
+
+<div align="center">
+
+| Module | Features Demonstrated |
+|--------|----------------------|
+| 🏠 **Landing Page** | Professional UI, Navigation, Call-to-Actions |
+| 🔐 **Authentication** | Employee Login, Admin Login, JWT Security |
+| 👤 **Employee Portal** | Dashboard, Profile, Attendance Overview |
+| ⏰ **Attendance System** | Clock In/Out, Time Tracking, Status Detection |
+| 📝 **Leave Management** | Application Form, Document Upload, Status Tracking |
+| 💰 **Payroll Module** | Salary Slips, PDF Download, Payment History |
+| 👨‍💼 **Admin Dashboard** | Analytics, Employee Management, Approvals |
+| 📊 **Reports** | Excel Export, PDF Generation, Data Filtering |
+
+</div>
+
+**📥 [Download Demo Video](./DEMO_VIDEO.mp4)** | **🔗 [View on GitHub](https://github.com/Pratikg27/attendance-system/blob/main/DEMO_VIDEO.mp4)**
 
 ---
 
