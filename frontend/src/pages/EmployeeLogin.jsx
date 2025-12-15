@@ -1,6 +1,6 @@
 ﻿import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import api from '../api';
 import '../styles/Login.css';
 
 const EmployeeLogin = () => {
@@ -16,15 +16,16 @@ const EmployeeLogin = () => {
     setError('');
 
     try {
-    const response = await axios.post('http://localhost:5000/api/auth/login', {
-  email,
-  password,
-  role: 'employee'  
-});
+      const response = await api.post('/auth/login', {
+        email,
+        password,
+        role: 'employee'
+      });
+
       localStorage.setItem('token', response.data.token);
       localStorage.setItem('user', JSON.stringify(response.data.user));
       localStorage.setItem('userType', 'employee');
-      
+
       navigate('/employee/dashboard');
     } catch (err) {
       setError(err.response?.data?.message || 'Login failed');

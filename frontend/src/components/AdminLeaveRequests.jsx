@@ -1,3 +1,4 @@
+import API_URL from '../config/api';
 import { useState, useEffect } from 'react';
 import { getPendingLeaves, updateLeaveStatus } from '../services/api';
 import '../styles/Leave.css';

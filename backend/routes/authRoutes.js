@@ -72,29 +72,21 @@ router.post('/login', async (req, res) => {
 
   } else if (role === 'admin') {
     try {
-      const mysql = require('mysql2/promise');
-      const connection = await mysql.createConnection({
-        host: process.env.DB_HOST || 'localhost',
-        user: process.env.DB_USER || 'root',
-        password: process.env.DB_PASSWORD || '',
-        database: process.env.DB_NAME || 'attendance_system'
+      // ✅ FIXED: Use Sequelize instead of raw MySQL
+      const admin = await Admin.findOne({ 
+        where: { email: email.toLowerCase().trim() }
       });
 
-      const [admins] = await connection.execute(
-        'SELECT * FROM admins WHERE email = ?',
-        [email.toLowerCase().trim()]
-      );
-
-      await connection.end();
-
-      if (admins.length === 0) {
+      if (!admin) {
+        console.log('Admin not found');
         return res.status(401).json({ 
           success: false, 
           message: 'Invalid email or password' 
         });
       }
 
-      const admin = admins[0];
+      console.log('Admin found:', admin.name);
+
       const isPasswordValid = await bcrypt.compare(password, admin.password);
 
       if (!isPasswordValid) {
@@ -116,7 +108,7 @@ router.post('/login', async (req, res) => {
 
       return res.json({
         success: true,
-        message: 'Login successful',
+        message: 'Admin login successful',
         token,
         user: {
           id: admin.id,
@@ -130,7 +122,8 @@ router.post('/login', async (req, res) => {
       console.error('Admin login error:', error);
       return res.status(500).json({ 
         success: false, 
-        message: 'Server error during login' 
+        message: 'Server error during admin login',
+        error: error.message
       });
     }
 
@@ -181,16 +174,16 @@ router.post('/employee/login', async (req, res) => {
       });
     }
 
-  const token = jwt.sign(
-  { 
-    id: employee.employee_id,
-    employee_id: employee.employee_id,  // ← ADD THIS
-    email: employee.email,
-    role: 'employee'
-  },
-  JWT_SECRET,
-  { expiresIn: '24h' }
-);
+    const token = jwt.sign(
+      { 
+        id: employee.employee_id,
+        employee_id: employee.employee_id,
+        email: employee.email,
+        role: 'employee'
+      },
+      JWT_SECRET,
+      { expiresIn: '24h' }
+    );
 
     res.json({
       success: true,
@@ -232,22 +225,12 @@ router.post('/admin/login', async (req, res) => {
       });
     }
 
-    const mysql = require('mysql2/promise');
-    const connection = await mysql.createConnection({
-      host: process.env.DB_HOST || 'localhost',
-      user: process.env.DB_USER || 'root',
-      password: process.env.DB_PASSWORD || '',
-      database: process.env.DB_NAME || 'attendance_system'
+    // ✅ FIXED: Use Sequelize instead of raw MySQL
+    const admin = await Admin.findOne({ 
+      where: { email: email.toLowerCase().trim() }
     });
 
-    const [admins] = await connection.execute(
-      'SELECT * FROM admins WHERE email = ?',
-      [email.toLowerCase().trim()]
-    );
-
-    await connection.end();
-
-    if (admins.length === 0) {
+    if (!admin) {
       console.log('Admin not found');
       return res.status(401).json({ 
         success: false, 
@@ -255,7 +238,6 @@ router.post('/admin/login', async (req, res) => {
       });
     }
 
-    const admin = admins[0];
     console.log('Admin found:', admin.name);
 
     const isPasswordValid = await bcrypt.compare(password, admin.password);
@@ -282,10 +264,10 @@ router.post('/admin/login', async (req, res) => {
       message: 'Login successful',
       token,
       user: {
-        admin_id: admin.id,
+        id: admin.id,
         name: admin.name,
         email: admin.email,
-        role: 'Super Admin'
+        role: 'admin'
       }
     });
 
@@ -293,7 +275,8 @@ router.post('/admin/login', async (req, res) => {
     console.error('Admin login error:', error);
     res.status(500).json({ 
       success: false, 
-      message: 'Server error during login' 
+      message: 'Server error during login',
+      error: error.message
     });
   }
 });

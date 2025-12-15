@@ -1,3 +1,4 @@
+import API_URL from '../config/api';
 import { useState, useEffect } from 'react';
 import { getAttendanceRecords, downloadAttendanceExcel, downloadAttendancePDF } from '../services/api';
 import '../styles/Dashboard.css';
