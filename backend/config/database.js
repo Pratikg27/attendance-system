@@ -2,11 +2,12 @@ require('dotenv').config();
 const { Sequelize } = require('sequelize');
 
 const sequelize = new Sequelize(
-  process.env.DB_NAME || 'attendance_payroll_db',
+  process.env.DB_NAME || 'railway',
   process.env.DB_USER || 'root',
   process.env.DB_PASSWORD || '',
   {
     host: process.env.DB_HOST || 'localhost',
+    port: process.env.DB_PORT || 3306,  // ← Added port
     dialect: 'mysql',
     logging: false,
     pool: {
@@ -14,6 +15,9 @@ const sequelize = new Sequelize(
       min: 0,
       acquire: 30000,
       idle: 10000
+    },
+    dialectOptions: {  // ← Added for Railway
+      connectTimeout: 60000
     }
   }
 );

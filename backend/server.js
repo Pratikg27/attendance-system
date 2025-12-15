@@ -17,13 +17,13 @@ app.use(express.urlencoded({ extended: true }));
 const authenticateToken = require('./middleware/authMiddleware');
 
 // Routes
-app.use('/api/auth', require('./routes/authRoutes')); // No auth needed for login/register
-app.use('/api/employee', authenticateToken, require('./routes/employeeRoutes')); // Protected
-app.use('/api/admin', authenticateToken, require('./routes/adminRoutes')); // Protected
-app.use('/api/attendance', authenticateToken, require('./routes/attendanceRoutes')); // Protected ✅
-app.use('/api/leaves', authenticateToken, require('./routes/leaveRoutes')); // Protected
-app.use('/api/documents', authenticateToken, documentRoutes); // Protected
-app.use('/api/payroll', authenticateToken, payrollRoutes); // Protected
+app.use('/api/auth', require('./routes/authRoutes'));
+app.use('/api/employee', authenticateToken, require('./routes/employeeRoutes'));
+app.use('/api/admin', authenticateToken, require('./routes/adminRoutes'));
+app.use('/api/attendance', authenticateToken, require('./routes/attendanceRoutes'));
+app.use('/api/leaves', authenticateToken, require('./routes/leaveRoutes'));
+app.use('/api/documents', authenticateToken, documentRoutes);
+app.use('/api/payroll', authenticateToken, payrollRoutes);
 app.use('/uploads', express.static('uploads'));
 
 // Health check
@@ -31,14 +31,35 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', message: 'Server is running' });
 });
 
+// Database test route
+app.get('/api/test-db', async (req, res) => {
+  try {
+    await sequelize.authenticate();
+    res.json({ 
+      status: 'Database connected!', 
+      database: process.env.DB_NAME,
+      host: process.env.DB_HOST 
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      status: 'Database connection failed', 
+      error: error.message 
+    });
+  }
+});
+
 // Root route
 app.get('/', (req, res) => {
   res.json({ 
-    message: 'API Running', 
+    message: 'Attendance System API', 
+    status: 'Running',
+    environment: process.env.NODE_ENV,
     endpoints: { 
-      leaves_test: '/api/leaves/test',
       health: '/api/health',
-      payroll: '/api/payroll/my-slips'
+      test_db: '/api/test-db',
+      auth: '/api/auth',
+      leaves: '/api/leaves',
+      payroll: '/api/payroll'
     } 
   });
 });
@@ -52,17 +73,23 @@ const PORT = process.env.PORT || 5000;
 
 const startServer = async () => {
   try {
+    // Test Sequelize connection
     await sequelize.authenticate();
-    console.log('✅ Database connected!');
-    await sequelize.sync(); 
-    console.log('✅ Tables synced!');
+    console.log('✅ Sequelize connected to Railway MySQL!');
+    
+    // Sync tables (be careful in production!)
+    await sequelize.sync({ alter: false }); // Don't alter existing tables
+    console.log('✅ Database tables synced!');
+    
+    // Start server
     app.listen(PORT, () => {
       console.log('🚀 Server running on port ' + PORT);
-      console.log('🍃 Leave routes: /api/leaves/test');
-      console.log('💰 Payroll routes: /api/payroll/my-slips');
+      console.log('🗄️ Database: ' + process.env.DB_NAME);
+      console.log('🌐 Host: ' + process.env.DB_HOST);
+      console.log('📊 Environment: ' + process.env.NODE_ENV);
     });
   } catch (error) {
-    console.error('❌ Error:', error.message);
+    console.error('❌ Startup Error:', error.message);
     process.exit(1);
   }
 };
