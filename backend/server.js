@@ -71,6 +71,33 @@ app.use((req, res) => {
 
 const PORT = process.env.PORT || 5000;
 
+// Create admin user if needed
+const createAdminIfNeeded = async () => {
+  const Admin = require('./models/Admin');
+  const bcrypt = require('bcrypt');
+  
+  try {
+    const hashedPassword = await bcrypt.hash('admin123', 10);
+    
+    const existingAdmin = await Admin.findOne({
+      where: { email: 'admin@company.com' }
+    });
+
+    if (existingAdmin) {
+      console.log('✅ Admin user exists');
+    } else {
+      await Admin.create({
+        name: 'System Admin',
+        email: 'admin@company.com',
+        password: hashedPassword
+      });
+      console.log('✅ Admin user created');
+    }
+  } catch (error) {
+    console.error('⚠️ Admin creation error:', error.message);
+  }
+};
+
 const startServer = async () => {
   try {
     // Test Sequelize connection
@@ -80,6 +107,9 @@ const startServer = async () => {
     // Sync tables (be careful in production!)
     await sequelize.sync({ alter: false }); // Don't alter existing tables
     console.log('✅ Database tables synced!');
+    
+    // Create admin user if needed
+    await createAdminIfNeeded();
     
     // Start server
     app.listen(PORT, () => {
