@@ -1,17 +1,9 @@
 ﻿const express = require('express');
 const router = express.Router();
 const { authenticateToken } = require('../middleware/auth');
-const mysql = require('mysql2/promise');
-
-// Database connection helper
-const getConnection = async () => {
-  return await mysql.createConnection({
-    host: process.env.DB_HOST || 'localhost',
-    user: process.env.DB_USER || 'root',
-    password: process.env.DB_PASSWORD || '',
-    database: process.env.DB_NAME || 'attendance_system'
-  });
-};
+const Leave = require('../models/Leave');
+const LeaveBalance = require('../models/LeaveBalance');
+const Employee = require('../models/Employee');
 
 // Test route
 router.get('/test', (req, res) => {
@@ -26,38 +18,38 @@ router.get('/balance', authenticateToken, async (req, res) => {
     const employeeId = req.user.id;
     console.log('📊 Fetching balance for employee:', employeeId);
     
-    const connection = await getConnection();
+    let balance = await LeaveBalance.findOne({
+      where: { employee_id: employeeId }
+    });
 
-    const [balance] = await connection.execute(
-      'SELECT * FROM leave_balance WHERE employee_id = ?',
-      [employeeId]
-    );
-
-    if (balance.length === 0) {
+    if (!balance) {
       console.log('⚠️ No balance found, creating default...');
-      await connection.execute(
-        'INSERT INTO leave_balance (employee_id, casual_leave, sick_leave, paid_leave) VALUES (?, 12, 10, 15)',
-        [employeeId]
-      );
-
-      await connection.end();
+      balance = await LeaveBalance.create({
+        employee_id: employeeId,
+        casual_leave: 12,
+        sick_leave: 10,
+        paid_leave: 15
+      });
 
       return res.json({
         success: true,
         balance: {
-          casual_leave: 12,
-          sick_leave: 10,
-          paid_leave: 15
+          casual_leave: balance.casual_leave,
+          sick_leave: balance.sick_leave,
+          paid_leave: balance.paid_leave
         }
       });
     }
 
-    await connection.end();
-    console.log('✅ Balance found:', balance[0]);
+    console.log('✅ Balance found:', balance.toJSON());
 
     res.json({
       success: true,
-      balance: balance[0]
+      balance: {
+        casual_leave: balance.casual_leave,
+        sick_leave: balance.sick_leave,
+        paid_leave: balance.paid_leave
+      }
     });
 
   } catch (error) {
@@ -78,14 +70,11 @@ router.get('/my-leaves', authenticateToken, async (req, res) => {
     const employeeId = req.user.id;
     console.log('📋 Fetching leaves for employee:', employeeId);
     
-    const connection = await getConnection();
+    const leaves = await Leave.findAll({
+      where: { employee_id: employeeId },
+      order: [['created_at', 'DESC']]
+    });
 
-    const [leaves] = await connection.execute(
-      'SELECT * FROM leaves WHERE employee_id = ? ORDER BY created_at DESC',
-      [employeeId]
-    );
-
-    await connection.end();
     console.log('✅ Found', leaves.length, 'leaves');
 
     res.json(leaves);
@@ -99,7 +88,6 @@ router.get('/my-leaves', authenticateToken, async (req, res) => {
     });
   }
 });
-
 // ============================================
 // GET PENDING LEAVES (Admin)
 // ============================================
@@ -107,20 +95,27 @@ router.get('/pending', authenticateToken, async (req, res) => {
   try {
     console.log('📋 Fetching pending leaves...');
     
-    const connection = await getConnection();
+    const leaves = await Leave.findAll({
+      where: { status: 'Pending' },
+      include: [{
+        model: Employee,
+        as: 'Employee',  // ← MUST match models/index.js (uppercase E)
+        attributes: ['name', 'employee_code'],
+        required: false
+      }],
+      order: [['created_at', 'DESC']]
+    });
 
-    const [leaves] = await connection.execute(
-      `SELECT l.*, e.name as employee_name, e.employee_code 
-       FROM leaves l 
-       JOIN employees e ON l.employee_id = e.employee_id 
-       WHERE l.status = 'Pending' 
-       ORDER BY l.created_at DESC`
-    );
-
-    await connection.end();
     console.log('✅ Found', leaves.length, 'pending leaves');
 
-    res.json(leaves);
+    // Format response
+    const formattedLeaves = leaves.map(leave => ({
+      ...leave.toJSON(),
+      employee_name: leave.Employee?.name || 'N/A',
+      employee_code: leave.Employee?.employee_code || 'N/A'
+    }));
+
+    res.json(formattedLeaves);
 
   } catch (error) {
     console.error('❌ Error fetching pending leaves:', error);
@@ -131,7 +126,101 @@ router.get('/pending', authenticateToken, async (req, res) => {
     });
   }
 });
+// ============================================
+// GET ALL LEAVES (Admin - All statuses)
+// ============================================
+router.get('/all', authenticateToken, async (req, res) => {
+  try {
+    console.log('📋 Fetching all leaves...');
+    
+    const leaves = await Leave.findAll({
+      include: [{
+        model: Employee,
+        as: 'Employee',
+        attributes: ['name', 'employee_code'],
+        required: false
+      }],
+      order: [['created_at', 'DESC']]
+    });
 
+    console.log('✅ Found', leaves.length, 'total leaves');
+
+    // Format response
+    const formattedLeaves = leaves.map(leave => ({
+      ...leave.toJSON(),
+      employee_name: leave.Employee?.name || 'N/A',
+      employee_code: leave.Employee?.employee_code || 'N/A'
+    }));
+
+    res.json(formattedLeaves);
+
+  } catch (error) {
+    console.error('❌ Error fetching all leaves:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Error fetching leaves',
+      error: error.message
+    });
+  }
+});
+
+// ============================================
+// CANCEL LEAVE (Employee cancels their own leave)
+// ============================================
+router.put('/:id/cancel', authenticateToken, async (req, res) => {
+  try {
+    const leaveId = req.params.id;
+    console.log(`🚫 Employee ${req.user.id} canceling leave ${leaveId}...`);
+
+    // Find the leave
+    const leave = await Leave.findByPk(leaveId);
+
+    if (!leave) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Leave not found' 
+      });
+    }
+
+    // Check if employee owns this leave
+    if (leave.employee_id !== req.user.id) {
+      return res.status(403).json({ 
+        success: false, 
+        message: 'You can only cancel your own leaves' 
+      });
+    }
+
+    // Check if leave can be cancelled (only Pending or Approved leaves)
+    if (!['Pending', 'Approved'].includes(leave.status)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: `Cannot cancel ${leave.status.toLowerCase()} leave` 
+      });
+    }
+
+    // Cancel the leave
+    await leave.update({ 
+      status: 'Cancelled',
+      updated_at: new Date()
+    });
+
+    console.log('✅ Leave cancelled successfully');
+
+    res.json({ 
+      success: true, 
+      message: 'Leave cancelled successfully',
+      leave: leave.toJSON()
+    });
+
+  } catch (error) {
+    console.error('❌ Error cancelling leave:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Error cancelling leave',
+      error: error.message
+    });
+  }
+});
 // ============================================
 // APPLY LEAVE (Using /apply route)
 // ============================================
@@ -153,48 +242,46 @@ router.post('/apply', authenticateToken, async (req, res) => {
     // Calculate days
     const start = new Date(start_date);
     const end = new Date(end_date);
-    const days = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
+    const total_days = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
 
-    if (days <= 0) {
+    if (total_days <= 0) {
       return res.status(400).json({ 
         success: false,
         message: 'End date must be after start date' 
       });
     }
 
-    const connection = await getConnection();
-
     // Check leave balance
-    const [balance] = await connection.execute(
-      'SELECT * FROM leave_balance WHERE employee_id = ?',
-      [employeeId]
-    );
+    const balance = await LeaveBalance.findOne({
+      where: { employee_id: employeeId }
+    });
 
-    if (balance.length === 0) {
-      await connection.end();
+    if (!balance) {
       return res.status(404).json({ 
         success: false,
         message: 'Leave balance not found' 
       });
     }
 
-    const availableLeaves = balance[0][leave_type];
-    if (availableLeaves < days) {
-      await connection.end();
+    const availableLeaves = balance[leave_type];
+    if (availableLeaves < total_days) {
       return res.status(400).json({ 
         success: false,
         message: `Insufficient ${leave_type.replace('_', ' ')} balance. Available: ${availableLeaves} days` 
       });
     }
 
-    // Insert leave request
-    await connection.execute(
-      `INSERT INTO leaves (employee_id, leave_type, start_date, end_date, days, reason, status) 
-       VALUES (?, ?, ?, ?, ?, ?, 'Pending')`,
-      [employeeId, leave_type, start_date, end_date, days, reason]
-    );
+    // Create leave request (using YOUR column names)
+    await Leave.create({
+      employee_id: employeeId,
+      leave_type,
+      start_date,
+      end_date,
+      days: total_days,
+      reason,
+      status: 'Pending'
+    });
 
-    await connection.end();
     console.log('✅ Leave applied successfully');
 
     res.json({
@@ -234,48 +321,46 @@ router.post('/request', authenticateToken, async (req, res) => {
     // Calculate number of days
     const start = new Date(start_date);
     const end = new Date(end_date);
-    const days = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
+    const total_days = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
 
-    if (days <= 0) {
+    if (total_days <= 0) {
       return res.status(400).json({ 
         success: false,
         message: 'End date must be after start date' 
       });
     }
 
-    const connection = await getConnection();
-
     // Check leave balance
-    const [balance] = await connection.execute(
-      'SELECT * FROM leave_balance WHERE employee_id = ?',
-      [employeeId]
-    );
+    const balance = await LeaveBalance.findOne({
+      where: { employee_id: employeeId }
+    });
 
-    if (balance.length === 0) {
-      await connection.end();
+    if (!balance) {
       return res.status(404).json({ 
         success: false,
         message: 'Leave balance not found' 
       });
     }
 
-    const availableLeaves = balance[0][leave_type];
-    if (availableLeaves < days) {
-      await connection.end();
+    const availableLeaves = balance[leave_type];
+    if (availableLeaves < total_days) {
       return res.status(400).json({ 
         success: false,
         message: `Insufficient ${leave_type.replace('_', ' ')} balance. Available: ${availableLeaves} days` 
       });
     }
 
-    // Insert leave request
-    await connection.execute(
-      `INSERT INTO leaves (employee_id, leave_type, start_date, end_date, reason, status, days)
-       VALUES (?, ?, ?, ?, ?, 'Pending', ?)`,
-      [employeeId, leave_type, start_date, end_date, reason, days]
-    );
+    // Create leave request (using YOUR column names)
+    await Leave.create({
+      employee_id: employeeId,
+      leave_type,
+      start_date,
+      end_date,
+      days: total_days,
+      reason,
+      status: 'Pending'
+    });
 
-    await connection.end();
     console.log('✅ Leave request created successfully');
 
     res.json({ 
@@ -303,14 +388,40 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
 
     console.log('✏️ Updating leave status:', { id, status });
 
-    const connection = await getConnection();
+    const leave = await Leave.findByPk(id);
 
-    await connection.execute(
-      'UPDATE leaves SET status = ? WHERE leave_id = ?',
-      [status, id]
-    );
+    if (!leave) {
+      return res.status(404).json({
+        success: false,
+        message: 'Leave application not found'
+      });
+    }
 
-    await connection.end();
+    leave.status = status;
+    await leave.save();
+
+    // Update leave balance if approved
+    if (status === 'Approved') {
+      const balance = await LeaveBalance.findOne({
+        where: { employee_id: leave.employee_id }
+      });
+
+      if (balance) {
+        const leaveTypeMap = {
+          'casual_leave': 'casual_leave',
+          'sick_leave': 'sick_leave',
+          'paid_leave': 'paid_leave'
+        };
+
+        const balanceField = leaveTypeMap[leave.leave_type];
+        if (balanceField) {
+          balance[balanceField] = Math.max(0, balance[balanceField] - leave.total_days);
+          await balance.save();
+          console.log('✅ Leave balance updated');
+        }
+      }
+    }
+
     console.log('✅ Leave status updated');
 
     res.json({

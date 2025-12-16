@@ -2,10 +2,11 @@ const { DataTypes } = require('sequelize');
 const sequelize = require('../config/database');
 
 const Leave = sequelize.define('Leave', {
-  id: {
+  leave_id: {
     type: DataTypes.INTEGER,
     primaryKey: true,
-    autoIncrement: true
+    autoIncrement: true,
+    field: 'leave_id'
   },
   employee_id: {
     type: DataTypes.INTEGER,
@@ -16,7 +17,7 @@ const Leave = sequelize.define('Leave', {
     }
   },
   leave_type: {
-    type: DataTypes.ENUM('CL', 'SL', 'PL'),
+    type: DataTypes.STRING(50),
     allowNull: false
   },
   start_date: {
@@ -27,33 +28,17 @@ const Leave = sequelize.define('Leave', {
     type: DataTypes.DATEONLY,
     allowNull: false
   },
-  total_days: {
+  days: {
     type: DataTypes.INTEGER,
     allowNull: false
   },
   reason: {
     type: DataTypes.TEXT,
-    allowNull: false
+    allowNull: true
   },
   status: {
-    type: DataTypes.ENUM('Pending', 'Approved', 'Rejected'),
+    type: DataTypes.STRING(20),
     defaultValue: 'Pending'
-  },
-  applied_date: {
-    type: DataTypes.DATE,
-    defaultValue: DataTypes.NOW
-  },
-  approved_by: {
-    type: DataTypes.INTEGER,
-    allowNull: true
-  },
-  approved_date: {
-    type: DataTypes.DATE,
-    allowNull: true
-  },
-  admin_remarks: {
-    type: DataTypes.TEXT,
-    allowNull: true
   }
 }, {
   tableName: 'leaves',

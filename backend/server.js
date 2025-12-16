@@ -5,7 +5,8 @@ const sequelize = require('./config/database');
 const db = require('./config/db');
 const documentRoutes = require('./routes/documentRoutes');
 const payrollRoutes = require('./routes/payrollRoutes');
-
+// Load model associations
+require('./models');
 const app = express();
 
 // Middleware

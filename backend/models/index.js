@@ -6,6 +6,7 @@ const AdminUser = require('./AdminUser');
 const Employee = require('./Employee');
 const Attendance = require('./Attendance');
 const Leave = require('./Leave');
+const LeaveBalance = require('./LeaveBalance');
 const Payroll = require('./Payroll');
 const Overtime = require('./Overtime');
 
@@ -16,6 +17,7 @@ const models = {
   Employee,
   Attendance,
   Leave,
+  LeaveBalance,
   Payroll,
   Overtime
 };
@@ -26,13 +28,15 @@ Object.keys(models).forEach(modelName => {
     models[modelName].associate(models);
   }
 });
-
 // Define manual associations
 Employee.hasMany(Attendance, { foreignKey: 'employee_id', as: 'attendances' });
 Attendance.belongsTo(Employee, { foreignKey: 'employee_id', as: 'employee' });
 
-Employee.hasMany(Leave, { foreignKey: 'employee_id', as: 'leaves' });
-Leave.belongsTo(Employee, { foreignKey: 'employee_id', as: 'employee' });
+Employee.hasMany(Leave, { foreignKey: 'employee_id', as: 'Leaves' });
+Leave.belongsTo(Employee, { foreignKey: 'employee_id', as: 'Employee' });
+
+Employee.hasOne(LeaveBalance, { foreignKey: 'employee_id', as: 'leaveBalance' });
+LeaveBalance.belongsTo(Employee, { foreignKey: 'employee_id', as: 'employee' });
 
 Employee.hasMany(Payroll, { foreignKey: 'employee_id', as: 'payrolls' });
 Payroll.belongsTo(Employee, { foreignKey: 'employee_id', as: 'employee' });
@@ -59,6 +63,7 @@ module.exports = {
   Employee,
   Attendance,
   Leave,
+  LeaveBalance,
   Payroll,
   Overtime
 };

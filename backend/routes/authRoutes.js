@@ -11,20 +11,34 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-this';
 // GENERAL LOGIN (Routes to Employee or Admin)
 // ============================================
 router.post('/login', async (req, res) => {
-  const { email, password, role } = req.body;
+  const { email, employee_code, password, role } = req.body;
 
-  console.log('General login attempt:', { email, role });
+  console.log('General login attempt:', { email, employee_code, role });
 
   if (role === 'employee') {
     try {
-      const employee = await Employee.findOne({ 
-        where: { email: email.toLowerCase().trim() }
-      });
+      // For employees, allow login with either email OR employee_code
+      let employee;
+      
+      if (employee_code) {
+        employee = await Employee.findOne({ 
+          where: { employee_code: employee_code.trim() }
+        });
+      } else if (email) {
+        employee = await Employee.findOne({ 
+          where: { email: email.toLowerCase().trim() }
+        });
+      } else {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Email or employee code is required' 
+        });
+      }
 
       if (!employee) {
         return res.status(401).json({ 
           success: false, 
-          message: 'Invalid email or password' 
+          message: 'Invalid credentials' 
         });
       }
 
@@ -33,7 +47,7 @@ router.post('/login', async (req, res) => {
       if (!isPasswordValid) {
         return res.status(401).json({ 
           success: false, 
-          message: 'Invalid email or password' 
+          message: 'Invalid credentials' 
         });
       }
 
@@ -58,6 +72,7 @@ router.post('/login', async (req, res) => {
           email: employee.email,
           department: employee.department,
           designation: employee.designation,
+          employee_code: employee.employee_code,
           role: 'employee'
         }
       });
@@ -72,7 +87,13 @@ router.post('/login', async (req, res) => {
 
   } else if (role === 'admin') {
     try {
-      // ✅ FIXED: Use Sequelize instead of raw MySQL
+      if (!email) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Email is required' 
+        });
+      }
+
       const admin = await Admin.findOne({ 
         where: { email: email.toLowerCase().trim() }
       });
