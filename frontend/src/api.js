@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // Get API URL from Vite environment variable
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API_URL = import.meta.env.VITE_API_URL || 'https://attendance-system-5fx5.onrender.com';
 
 console.log('🌐 API URL:', API_URL); // Debug log
 
