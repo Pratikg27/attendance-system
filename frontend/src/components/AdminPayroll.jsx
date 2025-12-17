@@ -42,7 +42,7 @@ const AdminPayroll = () => {
       headers: { Authorization: `Bearer ${token}` }
     });
     console.log('✅ Payrolls fetched:', response.data);
-    setPayrolls(response.data || []);
+    setPayrolls(response.data.payroll || response.data || []);
   } catch (error) {
     console.error('Error fetching payrolls:', error);
     setPayrolls([]);

@@ -7,17 +7,24 @@ const sequelize = new Sequelize(
   process.env.DB_PASSWORD || '',
   {
     host: process.env.DB_HOST || 'localhost',
-    port: process.env.DB_PORT || 3306,  // ← Added port
+    port: process.env.DB_PORT || 3306,
     dialect: 'mysql',
     logging: false,
     pool: {
-      max: 5,
+      max: 10,
       min: 0,
-      acquire: 30000,
-      idle: 10000
+      acquire: 60000,      // ← Increased from 30000
+      idle: 10000,
+      evict: 10000,
+      handleDisconnects: true
     },
-    dialectOptions: {  // ← Added for Railway
-      connectTimeout: 60000
+    dialectOptions: {
+      connectTimeout: 60000,
+      enableKeepAlive: true,
+      keepAliveInitialDelay: 0
+    },
+    retry: {
+      max: 3
     }
   }
 );

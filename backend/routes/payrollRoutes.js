@@ -1,33 +1,22 @@
 const express = require('express');
 const router = express.Router();
 const { authenticateToken } = require('../middleware/auth');
-const mysql = require('mysql2/promise');
+const sequelize = require('../config/database');
 
-// Database connection helper
-const getConnection = async () => {
-  return await mysql.createConnection({
-    host: process.env.DB_HOST || 'localhost',
-    user: process.env.DB_USER || 'root',
-    password: process.env.DB_PASSWORD || '',
-    database: process.env.DB_NAME || 'attendance_system'
-  });
-};
 // ============================================
 // GET ALL EMPLOYEES (for admin dropdown)
 // ============================================
 router.get('/employees', authenticateToken, async (req, res) => {
   try {
     console.log('📋 Fetching all employees for payroll');
-    const connection = await getConnection();
 
-   const [employees] = await connection.execute(
-  `SELECT employee_id as id, name, email, department, employee_id 
-   FROM employees 
-   WHERE is_active = 1
-   ORDER BY name`
-);
+    const [employees] = await sequelize.query(
+      `SELECT employee_id as id, name, email, department, employee_id 
+       FROM employees 
+       WHERE is_active = 1
+       ORDER BY name`
+    );
 
-    await connection.end();
     console.log('✅ Fetched employees:', employees.length);
     res.json(employees);
   } catch (error) {
@@ -42,18 +31,16 @@ router.get('/employees', authenticateToken, async (req, res) => {
 router.get('/all', authenticateToken, async (req, res) => {
   try {
     console.log('📊 Fetching all payroll records');
-    const connection = await getConnection();
 
-    const [payrolls] = await connection.execute(
-      `SELECT p.*, e.name, e.email, e.employee_id
+    const [payrolls] = await sequelize.query(
+      `SELECT p.*, e.name, e.email, e.employee_id, e.employee_code
        FROM payroll p
        JOIN employees e ON p.employee_id = e.employee_id
-       ORDER BY p.created_at DESC`
+       ORDER BY p.month DESC, e.name ASC`
     );
 
-    await connection.end();
     console.log('✅ Fetched payrolls:', payrolls.length);
-    res.json(payrolls);
+    res.json({ success: true, payroll: payrolls });
   } catch (error) {
     console.error('❌ Error fetching payrolls:', error);
     res.status(500).json({ success: false, message: 'Error fetching payrolls' });
@@ -67,23 +54,23 @@ router.get('/my-slips', authenticateToken, async (req, res) => {
   try {
     console.log('💰 Fetching salary slips for employee:', req.user.employee_id);
     
-    const connection = await getConnection();
-    const [payrolls] = await connection.execute(
+    const [payrolls] = await sequelize.query(
       `SELECT p.*, e.name, e.email, e.department
        FROM payroll p
        JOIN employees e ON p.employee_id = e.employee_id
        WHERE p.employee_id = ?
        ORDER BY p.month DESC`,
-      [req.user.employee_id]
+      {
+        replacements: [req.user.employee_id]
+      }
     );
 
-    await connection.end();
-   console.log('✅ Fetched salary slips:', payrolls.length);
+    console.log('✅ Fetched salary slips:', payrolls.length);
 
-res.json({
-  success: true,
-  slips: payrolls  
-});
+    res.json({
+      success: true,
+      slips: payrolls  
+    });
 
   } catch (error) {
     console.error('❌ Error fetching salary slips:', error);
@@ -104,16 +91,15 @@ router.post('/generate', authenticateToken, async (req, res) => {
       return res.status(400).json({ success: false, error: 'Employee ID and Basic Salary are required' });
     }
 
-    const connection = await getConnection();
-
     // Get employee details
-    const [employee] = await connection.execute(
+    const [employee] = await sequelize.query(
       'SELECT * FROM employees WHERE employee_id = ?',
-      [employee_id]
+      {
+        replacements: [employee_id]
+      }
     );
 
     if (employee.length === 0) {
-      await connection.end();
       return res.status(404).json({ success: false, error: 'Employee not found' });
     }
 
@@ -130,29 +116,31 @@ router.post('/generate', authenticateToken, async (req, res) => {
     const month = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
 
     // Check if payroll already exists for this month
-    const [existing] = await connection.execute(
+    const [existing] = await sequelize.query(
       'SELECT * FROM payroll WHERE employee_id = ? AND month = ?',
-      [employee_id, month]
+      {
+        replacements: [employee_id, month]
+      }
     );
 
     if (existing.length > 0) {
-      await connection.end();
       return res.status(400).json({ 
         success: false, 
         error: `Salary slip already exists for ${currentDate.toLocaleString('en-US', { month: 'long', year: 'numeric' })}` 
       });
     }
 
-// Insert new payroll record
-await connection.execute(
-  `INSERT INTO payroll 
-   (employee_id, month, basic_salary, hra, other_allowances, gross_salary, 
-    other_deductions, total_deductions, net_salary, payment_status, generated_date)
-   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending', NOW())`,
-  [employee_id, month, basic, allow, bon, gross_salary, deduc, deduc, net_salary]
-);
+    // Insert new payroll record
+    await sequelize.query(
+      `INSERT INTO payroll 
+       (employee_id, month, basic_salary, hra, other_allowances, gross_salary, 
+        other_deductions, total_deductions, net_salary, payment_status, generated_date)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending', NOW())`,
+      {
+        replacements: [employee_id, month, basic, allow, bon, gross_salary, deduc, deduc, net_salary]
+      }
+    );
 
-    await connection.end();
     console.log('✅ Salary slip generated successfully');
 
     res.json({
@@ -184,26 +172,26 @@ router.put('/:id/mark-paid', authenticateToken, async (req, res) => {
     const { id } = req.params;
     console.log('💳 Marking payroll as paid:', id);
 
-    const connection = await getConnection();
-
     // Check if payroll exists
-    const [existing] = await connection.execute(
+    const [existing] = await sequelize.query(
       'SELECT * FROM payroll WHERE id = ?',
-      [id]
+      {
+        replacements: [id]
+      }
     );
 
     if (existing.length === 0) {
-      await connection.end();
       return res.status(404).json({ success: false, error: 'Payroll record not found' });
     }
 
     // Update payment status
-    await connection.execute(
+    await sequelize.query(
       'UPDATE payroll SET payment_status = ?, payment_date = NOW() WHERE id = ?',
-      ['Paid', id]
+      {
+        replacements: ['Paid', id]
+      }
     );
 
-    await connection.end();
     console.log('✅ Payroll marked as paid');
 
     res.json({
@@ -225,16 +213,15 @@ router.post('/calculate/:employeeId/:month', authenticateToken, async (req, res)
     const { employeeId, month } = req.params;
     console.log('💰 Calculating salary for:', employeeId, month);
 
-    const connection = await getConnection();
-
     // Get employee details
-    const [employee] = await connection.execute(
+    const [employee] = await sequelize.query(
       'SELECT * FROM employees WHERE employee_id = ?',
-      [employeeId]
+      {
+        replacements: [employeeId]
+      }
     );
 
     if (employee.length === 0) {
-      await connection.end();
       return res.status(404).json({ success: false, message: 'Employee not found' });
     }
 
@@ -244,7 +231,7 @@ router.post('/calculate/:employeeId/:month', authenticateToken, async (req, res)
     const overtime_rate = parseFloat(emp.overtime_rate) || 200;
 
     // Get attendance data for the month
-    const [attendance] = await connection.execute(
+    const [attendance] = await sequelize.query(
       `SELECT 
         COUNT(*) as total_days,
         SUM(CASE WHEN status = 'Present' THEN 1 ELSE 0 END) as present_days,
@@ -253,7 +240,9 @@ router.post('/calculate/:employeeId/:month', authenticateToken, async (req, res)
         SUM(CASE WHEN is_late = 1 THEN 1 ELSE 0 END) as late_days
       FROM attendance 
       WHERE employee_id = ? AND DATE_FORMAT(date, '%Y-%m') = ?`,
-      [employeeId, month]
+      {
+        replacements: [employeeId, month]
+      }
     );
 
     const att = attendance[0];
@@ -264,11 +253,13 @@ router.post('/calculate/:employeeId/:month', authenticateToken, async (req, res)
     const late_days = parseInt(att.late_days) || 0;
 
     // Get overtime hours
-    const [overtime] = await connection.execute(
+    const [overtime] = await sequelize.query(
       `SELECT COALESCE(SUM(hours), 0) as total_overtime 
        FROM overtime 
        WHERE employee_id = ? AND DATE_FORMAT(date, '%Y-%m') = ? AND status = 'Approved'`,
-      [employeeId, month]
+      {
+        replacements: [employeeId, month]
+      }
     );
 
     const overtime_hours = parseFloat(overtime[0].total_overtime) || 0;
@@ -286,34 +277,39 @@ router.post('/calculate/:employeeId/:month', authenticateToken, async (req, res)
     const net_salary = gross_salary - total_deductions;
 
     // Check if payroll already exists
-    const [existing] = await connection.execute(
+    const [existing] = await sequelize.query(
       'SELECT * FROM payroll WHERE employee_id = ? AND month = ?',
-      [employeeId, month]
+      {
+        replacements: [employeeId, month]
+      }
     );
 
     if (existing.length > 0) {
       // Update existing
-      await connection.execute(
+      await sequelize.query(
         `UPDATE payroll SET 
           basic_salary = ?, total_days = ?, present_days = ?, absent_days = ?, 
           late_days = ?, half_days = ?, overtime_hours = ?, overtime_amount = ?, 
           allowances = ?, deductions = ?, gross_salary = ?, net_salary = ?, status = 'Generated'
         WHERE employee_id = ? AND month = ?`,
-        [basic_salary, total_days, present_days, absent_days, late_days, half_days, 
-         overtime_hours, overtime_amount, allowances, total_deductions, gross_salary, net_salary, employeeId, month]
+        {
+          replacements: [basic_salary, total_days, present_days, absent_days, late_days, half_days, 
+           overtime_hours, overtime_amount, allowances, total_deductions, gross_salary, net_salary, employeeId, month]
+        }
       );
     } else {
       // Insert new
-      await connection.execute(
+      await sequelize.query(
         `INSERT INTO payroll (employee_id, month, basic_salary, total_days, present_days, absent_days, 
          late_days, half_days, overtime_hours, overtime_amount, allowances, deductions, gross_salary, net_salary, status)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Generated')`,
-        [employeeId, month, basic_salary, total_days, present_days, absent_days, late_days, half_days, 
-         overtime_hours, overtime_amount, allowances, total_deductions, gross_salary, net_salary]
+        {
+          replacements: [employeeId, month, basic_salary, total_days, present_days, absent_days, late_days, half_days, 
+           overtime_hours, overtime_amount, allowances, total_deductions, gross_salary, net_salary]
+        }
       );
     }
 
-    await connection.end();
     console.log('✅ Salary calculated successfully');
 
     res.json({
@@ -340,59 +336,6 @@ router.post('/calculate/:employeeId/:month', authenticateToken, async (req, res)
 });
 
 // ============================================
-// GET MY SALARY SLIPS (Employee)
-// ============================================
-router.get('/my-slips', authenticateToken, async (req, res) => {
-  try {
-    const employeeId = req.user.id;
-    console.log('📄 Fetching salary slips for employee:', employeeId);
-
-    const connection = await getConnection();
-
-    const [slips] = await connection.execute(
-      'SELECT * FROM payroll WHERE employee_id = ? ORDER BY month DESC',
-      [employeeId]
-    );
-
-    await connection.end();
-    console.log('✅ Found', slips.length, 'salary slips');
-
-    res.json({ success: true, slips });
-
-  } catch (error) {
-    console.error('❌ Error fetching salary slips:', error);
-    res.status(500).json({ success: false, message: 'Error fetching salary slips', error: error.message });
-  }
-});
-
-// ============================================
-// GET ALL PAYROLL (Admin)
-// ============================================
-router.get('/all', authenticateToken, async (req, res) => {
-  try {
-    console.log('📊 Fetching all payroll records...');
-
-    const connection = await getConnection();
-
-    const [payroll] = await connection.execute(
-      `SELECT p.*, e.name, e.employee_code, e.email 
-       FROM payroll p 
-       JOIN employees e ON p.employee_id = e.employee_id 
-       ORDER BY p.month DESC, e.name ASC`
-    );
-
-    await connection.end();
-    console.log('✅ Found', payroll.length, 'payroll records');
-
-    res.json({ success: true, payroll });
-
-  } catch (error) {
-    console.error('❌ Error fetching payroll:', error);
-    res.status(500).json({ success: false, message: 'Error fetching payroll', error: error.message });
-  }
-});
-
-// ============================================
 // MARK SALARY AS PAID (Admin)
 // ============================================
 router.put('/:id/paid', authenticateToken, async (req, res) => {
@@ -400,14 +343,13 @@ router.put('/:id/paid', authenticateToken, async (req, res) => {
     const { id } = req.params;
     console.log('💵 Marking salary as paid:', id);
 
-    const connection = await getConnection();
-
-    await connection.execute(
+    await sequelize.query(
       'UPDATE payroll SET status = "Paid", paid_date = NOW() WHERE payroll_id = ?',
-      [id]
+      {
+        replacements: [id]
+      }
     );
 
-    await connection.end();
     console.log('✅ Salary marked as paid');
 
     res.json({ success: true, message: 'Salary marked as paid' });
