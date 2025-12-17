@@ -22,7 +22,7 @@ const AdminPayroll = () => {
   const fetchEmployees = async () => {
   try {
     const token = localStorage.getItem('token');
-    const response = await axios.get('http://localhost:5000/api/payroll/employees', {
+    const response = await axios.get(`${import.meta.env.VITE_API_URL}/api/payroll/employees`, {
       headers: { Authorization: `Bearer ${token}` }
     });
     console.log('✅ Employees fetched:', response.data);
@@ -38,7 +38,7 @@ const AdminPayroll = () => {
  const fetchPayrolls = async () => {
   try {
     const token = localStorage.getItem('token');
-    const response = await axios.get('http://localhost:5000/api/payroll/all', {
+    const response = await axios.get(`${import.meta.env.VITE_API_URL}/api/payroll/all`, {
       headers: { Authorization: `Bearer ${token}` }
     });
     console.log('✅ Payrolls fetched:', response.data);
@@ -60,7 +60,7 @@ const AdminPayroll = () => {
     try {
       const token = localStorage.getItem('token');
       await axios.post(
-        'http://localhost:5000/api/payroll/generate',
+        `${import.meta.env.VITE_API_URL}/api/payroll/generate`,
         {
           employee_id: selectedEmployee,
           ...salaryData
@@ -90,7 +90,7 @@ const AdminPayroll = () => {
     try {
       const token = localStorage.getItem('token');
       await axios.put(
-        `http://localhost:5000/api/payroll/${payrollId}/mark-paid`,
+        `${import.meta.env.VITE_API_URL}/api/payroll/${payrollId}/mark-paid`,
         {},
         {
           headers: { Authorization: `Bearer ${token}` }
